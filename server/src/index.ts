@@ -2,6 +2,8 @@ import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import { feeBumpHandler } from "./handlers/feeBump";
 import { loadConfig } from "./config";
+import { apiKeyMiddleware } from "./middleware/apiKeys";
+import { apiKeyRateLimit } from "./middleware/rateLimit";
 
 dotenv.config();
 
@@ -14,7 +16,7 @@ app.get("/health", (req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
 
-app.post("/fee-bump", (req: Request, res: Response) => {
+app.post("/fee-bump", apiKeyMiddleware, apiKeyRateLimit, (req: Request, res: Response) => {
   feeBumpHandler(req, res, config);
 });
 
