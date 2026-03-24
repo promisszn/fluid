@@ -177,7 +177,7 @@ async function main(): Promise<void> {
     "Methodology:",
     "- Builds one unsigned fee-bump transaction per benchmark run.",
     "- Signs the same transaction repeatedly after clearing signatures to isolate signing latency.",
-    "- Verifies parity first to ensure the Rust signer produces the same Ed25519 signature as the current Node implementation.",
+    "- Verifies parity first to ensure the Rust signer produces the same Ed25519 signature over the Stellar transaction hash as the current Node implementation.",
     "",
   ].join("\n");
 

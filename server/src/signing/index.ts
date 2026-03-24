@@ -3,7 +3,7 @@ import { nativeSigner } from "./native";
 
 interface SignableTransaction {
   addDecoratedSignature(signature: unknown): void;
-  signatureBase(): Buffer;
+  hash(): Buffer;
 }
 
 interface SignerMetadata {
@@ -32,7 +32,7 @@ export async function signTransaction(
   secret: string
 ): Promise<void> {
   const { hint } = getSignerMetadata(secret);
-  const signature = await nativeSigner.signPayload(secret, tx.signatureBase());
+  const signature = await nativeSigner.signPayload(secret, tx.hash());
 
   tx.addDecoratedSignature(
     new StellarSdk.xdr.DecoratedSignature({
