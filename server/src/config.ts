@@ -56,7 +56,6 @@ let rrIndex = 0;
 
 /**
  * Pick the next fee payer account using Round Robin strategy.
- * Optionally skips accounts with low balance if horizonUrl is provided.
  */
 export function pickFeePayerAccount(config: Config): FeePayerAccount {
   const accounts = config.feePayerAccounts;

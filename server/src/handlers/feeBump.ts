@@ -45,7 +45,6 @@ export function feeBumpHandler(
       return;
     }
 
-    // Verify inner transaction is signed
     if (innerTransaction.signatures.length === 0) {
       res.status(400).json({
         error: "Inner transaction must be signed before fee-bumping",
