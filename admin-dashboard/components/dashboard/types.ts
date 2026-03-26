@@ -1,3 +1,9 @@
+export type DashboardSignerStatus =
+  | "Active"
+  | "Low Balance"
+  | "Sequence Error"
+  | "Inactive";
+
 export interface DashboardTransaction {
   id: string;
   hash: string;
@@ -12,7 +18,7 @@ export interface DashboardTransaction {
 export interface DashboardSigner {
   id: string;
   publicKey: string;
-  status: "active" | "inactive";
+  status: DashboardSignerStatus;
   balance: string;
   inFlight: number;
   totalUses: number;
