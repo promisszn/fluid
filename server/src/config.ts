@@ -36,24 +36,25 @@ export interface Config {
 
 export function loadConfig(): Config {
   const allowedOriginsRaw = process.env.FLUID_ALLOWED_ORIGINS;
-  const allowedOrigins =
-    allowedOriginsRaw
-      ?.split(",")
-      .map((s) => s.trim())
-      .filter(Boolean) ?? ["*"];
+  const allowedOrigins = allowedOriginsRaw
+    ?.split(",")
+    .map((s: string) => s.trim())
+    .filter(Boolean) ?? ["*"];
 
   const rateLimitWindowMs = parseInt(
     process.env.FLUID_RATE_LIMIT_WINDOW_MS || "60000",
-    10
+    10,
   );
   const rateLimitMax = parseInt(process.env.FLUID_RATE_LIMIT_MAX || "5", 10);
-
   const baseFee = parseInt(process.env.FLUID_BASE_FEE || "100", 10);
   const feeMultiplier = parseFloat(process.env.FLUID_FEE_MULTIPLIER || "2.0");
   const networkPassphrase =
     process.env.STELLAR_NETWORK_PASSPHRASE ||
     "Test SDF Network ; September 2015";
   const horizonUrl = process.env.STELLAR_HORIZON_URL;
+
+  const maxXdrSize = parseInt(process.env.FLUID_MAX_XDR_SIZE || "10240", 10);
+  const maxOperations = parseInt(process.env.FLUID_MAX_OPERATIONS || "100", 10);
 
   const vaultAddr = process.env.VAULT_ADDR;
   const vaultToken = process.env.VAULT_TOKEN;
@@ -62,64 +63,55 @@ export function loadConfig(): Config {
   const vaultKvMount = process.env.FLUID_VAULT_KV_MOUNT || "secret";
   const vaultKvVersionRaw = process.env.FLUID_VAULT_KV_VERSION || "2";
   const vaultKvVersion = (vaultKvVersionRaw === "1" ? 1 : 2) as 1 | 2;
-  const vaultSecretField = process.env.FLUID_FEE_PAYER_VAULT_SECRET_FIELD || "secret";
+  const vaultSecretField =
+    process.env.FLUID_FEE_PAYER_VAULT_SECRET_FIELD || "secret";
 
   const vaultConfigured =
     !!vaultAddr &&
-    (!!vaultToken ||
-      (!!vaultAppRoleRoleId && !!vaultAppRoleSecretId));
-
-  const feePayerSecretsEnvRaw = process.env.FLUID_FEE_PAYER_SECRET;
-  const feePayerSecretsEnv = feePayerSecretsEnvRaw
-    ? feePayerSecretsEnvRaw.split(",").map((s) => s.trim()).filter(Boolean)
-    : [];
+    (!!vaultToken || (!!vaultAppRoleRoleId && !!vaultAppRoleSecretId));
 
   const vaultSecretPathsRaw = process.env.FLUID_FEE_PAYER_VAULT_SECRET_PATHS;
   const vaultSecretPaths = vaultSecretPathsRaw
-    ? vaultSecretPathsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+    ? vaultSecretPathsRaw
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean)
     : [];
 
   const vaultPublicKeysRaw = process.env.FLUID_FEE_PAYER_PUBLIC_KEYS;
   const vaultPublicKeys = vaultPublicKeysRaw
-    ? vaultPublicKeysRaw.split(",").map((s) => s.trim()).filter(Boolean)
+    ? vaultPublicKeysRaw
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean)
     : [];
 
-  if (vaultConfigured && vaultSecretPaths.length > 0 && vaultPublicKeys.length > 0) {
+  if (
+    vaultConfigured &&
+    vaultSecretPaths.length > 0 &&
+    vaultPublicKeys.length > 0
+  ) {
     if (vaultSecretPaths.length !== vaultPublicKeys.length) {
-      throw new Error(
-        "Vault mode requires FLUID_FEE_PAYER_VAULT_SECRET_PATHS and FLUID_FEE_PAYER_PUBLIC_KEYS to have the same number of entries"
-      );
+      throw new Error("Vault mode requires paths and public keys to match 1:1");
     }
 
     const vault: VaultConfig = {
       addr: vaultAddr!,
       token: vaultToken,
-      appRole:
-        vaultToken
-          ? undefined
-          : {
-              roleId: vaultAppRoleRoleId!,
-              secretId: vaultAppRoleSecretId!,
-            },
+      appRole: vaultToken
+        ? undefined
+        : { roleId: vaultAppRoleRoleId!, secretId: vaultAppRoleSecretId! },
       kvMount: vaultKvMount,
       kvVersion: vaultKvVersion,
       secretField: vaultSecretField,
     };
 
     const feePayerAccounts: FeePayerAccount[] = vaultPublicKeys.map(
-      (publicKey, i) => {
-        // We only need the public key to build the fee-bump transaction;
-        // the Rust signer will fetch the private key from Vault at runtime.
-        const keypair = StellarSdk.Keypair.fromPublicKey(publicKey);
-        return {
-          publicKey,
-          keypair,
-          secretSource: {
-            type: "vault",
-            secretPath: vaultSecretPaths[i],
-          },
-        };
-      }
+      (publicKey, i) => ({
+        publicKey,
+        keypair: StellarSdk.Keypair.fromPublicKey(publicKey),
+        secretSource: { type: "vault", secretPath: vaultSecretPaths[i] },
+      }),
     );
 
     return {
@@ -128,6 +120,8 @@ export function loadConfig(): Config {
       feeMultiplier,
       networkPassphrase,
       horizonUrl,
+      maxXdrSize,
+      maxOperations,
       allowedOrigins,
       rateLimitWindowMs,
       rateLimitMax,
@@ -135,40 +129,28 @@ export function loadConfig(): Config {
     };
   }
 
-  // Support comma-separated list of secrets
-  const secrets = rawSecrets
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (secrets.length === 0) {
-    throw new Error("FLUID_FEE_PAYER_SECRET must contain at least one secret");
-  // Env fallback is only used when the secret env var is explicitly configured.
-  // This is useful for local development; production should use Vault.
+  const feePayerSecretsEnvRaw = process.env.FLUID_FEE_PAYER_SECRET;
+  const feePayerSecretsEnv = feePayerSecretsEnvRaw
+    ? feePayerSecretsEnvRaw
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean)
+    : [];
+
   if (feePayerSecretsEnv.length === 0) {
-    throw new Error(
-      "No fee payer secrets configured. Provide either Vault settings (VAULT_ADDR + token/approle + FLUID_FEE_PAYER_VAULT_SECRET_PATHS + FLUID_FEE_PAYER_PUBLIC_KEYS) or set FLUID_FEE_PAYER_SECRET for env-based development."
-    );
+    throw new Error("No fee payer secrets configured.");
   }
 
-  const feePayerAccounts: FeePayerAccount[] = feePayerSecretsEnv.map((secret) => {
-    const keypair = StellarSdk.Keypair.fromSecret(secret);
-    return {
-      publicKey: keypair.publicKey(),
-      keypair,
-      secretSource: { type: "env", secret },
-    };
-  });
-
-  const baseFee = parseInt(process.env.FLUID_BASE_FEE || "100", 10);
-  const feeMultiplier = parseFloat(process.env.FLUID_FEE_MULTIPLIER || "2.0");
-  const networkPassphrase =
-    process.env.STELLAR_NETWORK_PASSPHRASE ||
-    "Test SDF Network ; September 2015";
-  const horizonUrl = process.env.STELLAR_HORIZON_URL;
-
-  // Safety limits to prevent DoS attacks
-  const maxXdrSize = parseInt(process.env.FLUID_MAX_XDR_SIZE || "10240", 10); // Default: 10KB
-  const maxOperations = parseInt(process.env.FLUID_MAX_OPERATIONS || "100", 10); // Default: 100 operations
+  const feePayerAccounts: FeePayerAccount[] = feePayerSecretsEnv.map(
+    (secret: string) => {
+      const keypair = StellarSdk.Keypair.fromSecret(secret);
+      return {
+        publicKey: keypair.publicKey(),
+        keypair,
+        secretSource: { type: "env", secret },
+      };
+    },
+  );
 
   return {
     feePayerAccounts,
@@ -184,12 +166,7 @@ export function loadConfig(): Config {
   };
 }
 
-// Round-robin counter (module-level, safe for single-threaded Node.js event loop)
 let rrIndex = 0;
-
-/**
- * Pick the next fee payer account using Round Robin strategy.
- */
 export function pickFeePayerAccount(config: Config): FeePayerAccount {
   const accounts = config.feePayerAccounts;
   const account = accounts[rrIndex % accounts.length];

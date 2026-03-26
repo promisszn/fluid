@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,12 +5,11 @@ generator client {
 datasource db {
   provider = "sqlite"
 }
-
-// Initial models for multi-tenancy and logging
 model Tenant {
   id        String   @id @default(uuid())
   name      String
   apiKey    String   @unique
+  webhookUrl String?
   createdAt DateTime @default(now())
   webhooks  WebhookDelivery[]
 }
@@ -24,13 +20,9 @@ model WebhookDelivery {
   tenant      Tenant   @relation(fields: [tenantId], references: [id])
   url         String
   payload     Json
-  status      String   @default("pending") // pending, success, failed
+  status      String   @default("pending")
   retryCount  Int      @default(0)
   lastError   String?
-  nextAttempt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  @@index([status])
-  @@index([tenantId])
 }

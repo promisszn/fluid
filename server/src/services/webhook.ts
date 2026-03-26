@@ -1,12 +1,8 @@
 import { Queue, Worker, Job } from "bullmq";
 import Redis from "ioredis";
 import axios from "axios";
+import {prisma} from "../utils/db";
 
-// Prisma client generation may not run in all environments; use a dynamic require
-// to avoid compile-time type dependency on generated client types.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { PrismaClient } = require("@prisma/client") as { PrismaClient: any };
-const prisma = new PrismaClient();
 const connection = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
 
 export const webhookQueue = new Queue("webhook-delivery", {
@@ -26,6 +22,37 @@ interface WebhookJobData {
 }
 
 export class WebhookService {
+  /**
+   * FIX: Added dispatch method for ledgerMonitor compatibility
+   */
+  async dispatch(tenantId: string, txHash: string, status: "success" | "failed"): Promise<void> {
+    // 1. Fetch the tenant to get their webhook URL
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenant || !tenant.webhookUrl) {
+      console.warn(`[Webhook] No webhook URL configured for tenant ${tenantId}. Skipping notification.`);
+      return;
+    }
+
+    // 2. Prepare the payload
+    const payload = {
+      event: "transaction.updated",
+      hash: txHash,
+      status: status,
+      timestamp: new Date().toISOString(),
+    };
+
+    // 3. Queue the delivery
+    await WebhookService.queueWebhook(tenantId, tenant.webhookUrl, payload);
+    
+    console.log(`[Webhook] Queued ${status} notification for tenant: ${tenant.name}`);
+  }
+
+  /**
+   * Original static method for manual/internal queuing
+   */
   static async queueWebhook(tenantId: string, url: string, payload: any) {
     const delivery = await prisma.webhookDelivery.create({
       data: {
@@ -44,7 +71,7 @@ export class WebhookService {
   }
 }
 
-// Worker logic
+// Worker logic for processing the queue
 export const startWebhookWorker = () => {
   const worker = new Worker<WebhookJobData>(
     "webhook-delivery",
@@ -77,7 +104,10 @@ export const startWebhookWorker = () => {
 
         console.log(`[Webhook] Delivery ${deliveryId} succeeded`);
       } catch (error: any) {
-        const errorMessage = error.response?.data || error.message;
+        const errorMessage = error.response?.data 
+          ? JSON.stringify(error.response.data) 
+          : error.message;
+          
         console.error(`[Webhook] Delivery ${deliveryId} failed: ${errorMessage}`);
 
         await prisma.webhookDelivery.update({
@@ -86,19 +116,18 @@ export const startWebhookWorker = () => {
             status: "failed",
             retryCount: job.attemptsMade + 1,
             lastError: errorMessage.toString().substring(0, 500),
-            nextAttempt: new Date(Date.now() + (job.opts.backoff as any).delay * Math.pow(2, job.attemptsMade)),
           },
         });
 
-        throw error; // Let BullMQ handle the retry
+        throw error; // Let BullMQ handle the exponential backoff retry
       }
     },
     { connection }
   );
 
-  worker.on("failed", (job: Job<WebhookJobData> | undefined, err: Error) => {
+  worker.on("failed", (job, err) => {
     if (job && job.attemptsMade >= 5) {
-      console.error(`[Webhook] Delivery ${job.id} failed permanently after 5 attempts`);
+      console.error(`[Webhook] Delivery ${job.id} failed permanently after 5 attempts: ${err.message}`);
     }
   });
 
