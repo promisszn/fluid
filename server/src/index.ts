@@ -9,7 +9,11 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { loadConfig } from "./config";
 import { AppError } from "./errors/AppError";
-import { feeBumpHandler } from "./handlers/feeBump";
+import { feeBumpHandler, feeBumpBatchHandler } from "./handlers/feeBump";
+import {
+  getHorizonFailoverClient,
+  initializeHorizonFailoverClient,
+} from "./horizon/failoverClient";
 import { apiKeyMiddleware } from "./middleware/apiKeys";
 import {
   listApiKeysHandler,
@@ -159,6 +163,16 @@ app.post(
   limiter,
   (req: Request, res: Response, next: NextFunction) => {
     void feeBumpHandler(req, res, config, next);
+  },
+);
+
+app.post(
+  "/fee-bump/batch",
+  apiKeyMiddleware,
+  apiKeyRateLimit,
+  limiter,
+  (req: Request, res: Response, next: NextFunction) => {
+    feeBumpBatchHandler(req, res, next, config);
   },
 );
 

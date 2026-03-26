@@ -24,6 +24,21 @@ export interface VaultConfig {
   secretField: string;
 }
 
+export interface Config {
+  feePayerAccounts: FeePayerAccount[];
+  signerPool: SignerPool;
+  baseFee: number;
+  feeMultiplier: number;
+  networkPassphrase: string;
+  horizonUrl?: string;
+  horizonUrls: string[];
+  horizonSelectionStrategy: HorizonSelectionStrategy;
+  rateLimitWindowMs: number;
+  rateLimitMax: number;
+  allowedOrigins: string[];
+  alerting: AlertingConfig;
+}
+
 export interface AlertEmailConfig {
   host: string;
   port: number;
@@ -269,8 +284,57 @@ export function pickFeePayerAccount(config: Config): FeePayerAccount {
     throw new Error("Failed to select fee payer account from signer pool");
   }
 
-  const nextPublicKey = activeKeys[rrIndex % activeKeys.length];
-  rrIndex = (rrIndex + 1) % activeKeys.length;
+  return value
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+function parseCommaSeparatedList(value: string | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function loadVaultConfig(): VaultConfig | undefined {
+  const addr = process.env.VAULT_ADDR?.trim();
+  if (!addr) {
+    return undefined;
+  }
+
+  const token = process.env.VAULT_TOKEN?.trim();
+  const roleId = process.env.VAULT_APPROLE_ROLE_ID?.trim();
+  const secretId = process.env.VAULT_APPROLE_SECRET_ID?.trim();
+  const kvMount = process.env.FLUID_VAULT_KV_MOUNT?.trim() || "secret";
+  const kvVersionRaw = process.env.FLUID_VAULT_KV_VERSION?.trim() || "2";
+  const kvVersion = kvVersionRaw === "1" ? 1 : 2;
+  const secretField = process.env.FLUID_FEE_PAYER_VAULT_SECRET_FIELD?.trim() || "secret";
+
+  return {
+    addr,
+    token,
+    appRole: token ? undefined : (roleId && secretId ? { roleId, secretId } : undefined),
+    kvMount,
+    kvVersion,
+    secretField,
+  };
+}
+
+// Round-robin counter (module-level, safe for single-threaded Node.js event loop)
+let rrIndex = 0;
+
+export function pickFeePayerAccount (config: Config): FeePayerAccount {
+  const snapshot = config.signerPool.getSnapshot();
+  const nextPublicKey = snapshot[rrIndex % snapshot.length]?.publicKey;
+  rrIndex = (rrIndex + 1) % snapshot.length;
+  const account = config.feePayerAccounts.find(
+    (candidate) => candidate.publicKey === nextPublicKey
+  );
 
   const account = config.feePayerAccounts.find((candidate) => candidate.publicKey === nextPublicKey);
   if (!account) {
