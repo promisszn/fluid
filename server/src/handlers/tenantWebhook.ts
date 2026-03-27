@@ -15,17 +15,29 @@ export async function updateWebhookHandler(
     return;
   }
 
-  const { webhookUrl } = result.data;
+  const { webhookSecret, webhookUrl } = result.data;
   const apiKeyConfig = res.locals.apiKey as ApiKeyConfig;
   const { tenantId } = apiKeyConfig;
 
   try {
     const tenant = await prisma.tenant.update({
       where: { id: tenantId },
-      data: { webhookUrl },
+      data: {
+        ...(webhookUrl !== undefined ? { webhookUrl } : {}),
+        ...(webhookSecret !== undefined ? { webhookSecret } : {}),
+      },
+      select: {
+        id: true,
+        webhookUrl: true,
+        webhookSecret: true,
+      },
     });
 
-    res.status(200).json(tenant);
+    res.status(200).json({
+      id: tenant.id,
+      webhookSecretConfigured: Boolean(tenant.webhookSecret),
+      webhookUrl: tenant.webhookUrl,
+    });
   } catch (error) {
     next(error);
   }

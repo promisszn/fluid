@@ -94,6 +94,78 @@ Response:
 
 Sends a manual low-balance alert through the configured Slack webhook and/or SMTP transport. This is useful for capturing the required review screenshot without draining a real account first.
 
+## Webhook Signing
+
+Outbound tenant webhooks are signed with `HMAC-SHA256` using the tenant-specific `webhookSecret` stored in the database. Every signed delivery includes:
+
+- `Content-Type: application/json`
+- `X-Fluid-Signature-256: sha256=<hex digest>`
+
+Tenants configure webhook delivery with `PATCH /tenant/webhook`:
+
+```json
+{
+  "webhookUrl": "https://example.com/fluid/webhooks",
+  "webhookSecret": "replace-with-a-long-random-secret"
+}
+```
+
+The API never returns the raw secret. It only returns whether a secret is configured.
+
+If a tenant has a webhook URL but no `webhookSecret`, Fluid logs the misconfiguration and refuses to send an unsigned webhook.
+
+### Verify in Node.js
+
+```js
+import crypto from "node:crypto";
+
+function verifyFluidWebhook(rawBody, signatureHeader, secret) {
+  const expected = `sha256=${crypto
+    .createHmac("sha256", secret)
+    .update(rawBody)
+    .digest("hex")}`;
+
+  const actual = signatureHeader || "";
+  const matches =
+    actual.length === expected.length &&
+    crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
+
+  if (!matches) {
+    console.error("Fluid webhook signature validation failed", {
+      expected,
+      received: actual,
+    });
+  }
+
+  return matches;
+}
+```
+
+### Verify in Python
+
+```python
+import hmac
+from hashlib import sha256
+
+
+def verify_fluid_webhook(raw_body: bytes, signature_header: str | None, secret: str) -> bool:
+    expected = "sha256=" + hmac.new(
+        secret.encode("utf-8"),
+        raw_body,
+        sha256,
+    ).hexdigest()
+    actual = signature_header or ""
+    matches = hmac.compare_digest(actual, expected)
+
+    if not matches:
+        print(
+            "Fluid webhook signature validation failed",
+            {"expected": expected, "received": actual},
+        )
+
+    return matches
+```
+
 ## Slack Alerts
 
 Critical alerts are posted to Slack as Block Kit messages with a severity emoji, ISO timestamp, and event detail. The server currently emits Slack alerts for:
