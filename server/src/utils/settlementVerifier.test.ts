@@ -4,12 +4,21 @@ import { verifySettlementPayment, extractSettlementRequirement } from "./settlem
 import { Config } from "../config";
 
 describe("settlementVerifier", () => {
+  const feePayerKeypair = StellarSdk.Keypair.random();
+  const feePayerPublicKey = feePayerKeypair.publicKey();
+  const sourcePublicKey = StellarSdk.Keypair.random().publicKey();
+  const issuerPublicKey = StellarSdk.Keypair.random().publicKey();
+  const wrongDestination = StellarSdk.Keypair.random().publicKey();
+  const createAccountDestination = StellarSdk.Keypair.random().publicKey();
+  const btcIssuerPublicKey = StellarSdk.Keypair.random().publicKey();
+  const settlementToken = `USDC:${issuerPublicKey}`;
+
   const mockConfig: Config = {
     feePayerAccounts: [
       {
-        publicKey: "GABC1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890AB",
-        keypair: StellarSdk.Keypair.fromSecret("SABC1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890AB"),
-        secretSource: { type: "env", secret: "SABC1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890AB" }
+        publicKey: feePayerPublicKey,
+        keypair: feePayerKeypair,
+        secretSource: { type: "env", secret: "placeholder-test-secret" }
       }
     ],
     signerPool: {} as any,
@@ -25,11 +34,9 @@ describe("settlementVerifier", () => {
     }
   };
 
-  const feePayerPublicKey = "GABC1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890AB";
-
   describe("verifySettlementPayment", () => {
     it("should accept a valid payment operation", () => {
-      const sourceAccount = new StellarSdk.Account("GTEST1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF12345678", "1");
+      const sourceAccount = new StellarSdk.Account(sourcePublicKey, "1");
       const innerTransaction = new StellarSdk.TransactionBuilder(sourceAccount, {
         fee: "100",
         networkPassphrase: "Test SDF Network ; September 2015",
@@ -55,7 +62,7 @@ describe("settlementVerifier", () => {
     });
 
     it("should accept a valid pathPaymentStrictReceive operation", () => {
-      const sourceAccount = new StellarSdk.Account("GTEST1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF12345678", "1");
+      const sourceAccount = new StellarSdk.Account(sourcePublicKey, "1");
       const innerTransaction = new StellarSdk.TransactionBuilder(sourceAccount, {
         fee: "100",
         networkPassphrase: "Test SDF Network ; September 2015",
@@ -65,7 +72,7 @@ describe("settlementVerifier", () => {
             sendAsset: StellarSdk.Asset.native(),
             sendMax: "1",
             destination: feePayerPublicKey,
-            destAsset: new StellarSdk.Asset("USDC", "GISSUER1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF123456"),
+            destAsset: new StellarSdk.Asset("USDC", issuerPublicKey),
             destAmount: "0.00002", // 200 stroops equivalent
           })
         )
@@ -73,17 +80,17 @@ describe("settlementVerifier", () => {
         .build();
 
       const result = verifySettlementPayment(innerTransaction, {
-        token: "USDC:GISSUER1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF123456",
+        token: settlementToken,
         requiredAmountStroops: 200,
       }, mockConfig);
 
       expect(result.isValid).toBe(true);
       expect(result.actualAmount).toBe("0.00002");
-      expect(result.assetCode).toBe("USDC:GISSUER1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF123456");
+      expect(result.assetCode).toBe(settlementToken);
     });
 
     it("should reject insufficient payment amount", () => {
-      const sourceAccount = new StellarSdk.Account("GTEST1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF12345678", "1");
+      const sourceAccount = new StellarSdk.Account(sourcePublicKey, "1");
       const innerTransaction = new StellarSdk.TransactionBuilder(sourceAccount, {
         fee: "100",
         networkPassphrase: "Test SDF Network ; September 2015",
@@ -110,14 +117,14 @@ describe("settlementVerifier", () => {
     });
 
     it("should reject payment to wrong destination", () => {
-      const sourceAccount = new StellarSdk.Account("GTEST1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF12345678", "1");
+      const sourceAccount = new StellarSdk.Account(sourcePublicKey, "1");
       const innerTransaction = new StellarSdk.TransactionBuilder(sourceAccount, {
         fee: "100",
         networkPassphrase: "Test SDF Network ; September 2015",
       })
         .addOperation(
           StellarSdk.Operation.payment({
-            destination: "GWRONG1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890AB",
+            destination: wrongDestination,
             asset: StellarSdk.Asset.native(),
             amount: "0.00002",
           })
@@ -135,7 +142,7 @@ describe("settlementVerifier", () => {
     });
 
     it("should reject payment with wrong asset", () => {
-      const sourceAccount = new StellarSdk.Account("GTEST1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF12345678", "1");
+      const sourceAccount = new StellarSdk.Account(sourcePublicKey, "1");
       const innerTransaction = new StellarSdk.TransactionBuilder(sourceAccount, {
         fee: "100",
         networkPassphrase: "Test SDF Network ; September 2015",
@@ -143,7 +150,7 @@ describe("settlementVerifier", () => {
         .addOperation(
           StellarSdk.Operation.payment({
             destination: feePayerPublicKey,
-            asset: new StellarSdk.Asset("BTC", "GBTC1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890"),
+            asset: new StellarSdk.Asset("BTC", btcIssuerPublicKey),
             amount: "0.00002",
           })
         )
@@ -151,7 +158,7 @@ describe("settlementVerifier", () => {
         .build();
 
       const result = verifySettlementPayment(innerTransaction, {
-        token: "USDC:GISSUER1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF123456",
+        token: settlementToken,
         requiredAmountStroops: 200,
       }, mockConfig);
 
@@ -160,14 +167,14 @@ describe("settlementVerifier", () => {
     });
 
     it("should reject when no settlement operations are found", () => {
-      const sourceAccount = new StellarSdk.Account("GTEST1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF12345678", "1");
+      const sourceAccount = new StellarSdk.Account(sourcePublicKey, "1");
       const innerTransaction = new StellarSdk.TransactionBuilder(sourceAccount, {
         fee: "100",
         networkPassphrase: "Test SDF Network ; September 2015",
       })
         .addOperation(
           StellarSdk.Operation.createAccount({
-            destination: "GDEST1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890AB",
+            destination: createAccountDestination,
             startingBalance: "1",
           })
         )
@@ -191,9 +198,9 @@ describe("settlementVerifier", () => {
     });
 
     it("should return requirement when token is specified", () => {
-      const result = extractSettlementRequirement("USDC:GISSUER1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF123456", 200);
+      const result = extractSettlementRequirement(settlementToken, 200);
       expect(result).toEqual({
-        token: "USDC:GISSUER1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF123456",
+        token: settlementToken,
         requiredAmountStroops: 200,
       });
     });

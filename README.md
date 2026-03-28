@@ -32,7 +32,7 @@ The Rust server listens on `http://localhost:3000` by default.
 The Rust server uses the same environment variable names as the legacy Node server:
 
 ```bash
-FLUID_FEE_PAYER_SECRET=SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+FLUID_FEE_PAYER_SECRET=YOUR_STELLAR_SECRET_KEY
 FLUID_BASE_FEE=100
 FLUID_FEE_MULTIPLIER=2.0
 STELLAR_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
@@ -63,6 +63,13 @@ Rust-only verification:
 ```bash
 cd fluid-server
 cargo test rust_server_handles_static_and_api_without_node --test rust_only_verification -- --nocapture
+```
+
+Horizon failover verification with reviewer-friendly logs:
+
+```bash
+cd fluid-server
+cargo test retries_failed_submission_on_secondary_node_and_logs_statuses -- --nocapture
 ```
 
 Node-vs-Rust parity verification:
