@@ -18,7 +18,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Install gitleaks
         shell: bash
@@ -35,7 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f .gitleaks.toml ]; then
-            gitleaks git --verbose --redact --config .gitleaks.toml .
+            gitleaks dir . --verbose --redact --config .gitleaks.toml
           else
-            gitleaks git --verbose --redact .
+            gitleaks dir . --verbose --redact
           fi

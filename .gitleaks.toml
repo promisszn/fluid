@@ -3,3 +3,18 @@ id = "stellar-secret-key"
 description = "Stellar Secret Key"
 regex = '''S[A-Z0-9]{55}'''
 tags = ["stellar", "secret"]
+
+[[allowlists]]
+description = "Ignore docs, examples, tests, and benchmark fixtures that intentionally contain placeholders"
+paths = [
+  '''^README\.md$''',
+  '''^\.env\.docker$''',
+  '''^server/\.env\.example$''',
+  '''^server/docs/''',
+  '''^server/scripts/testSettlement.*\.ts$''',
+  '''^server/src/utils/settlementVerifier\.test\.ts$''',
+  '''^server/src/benchmarks/''',
+  '''^server/benches/''',
+  '''^fluid-server/wasm-demo/''',
+  '''^fluid-server/src/lib\.rs$'''
+]

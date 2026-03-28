@@ -32,7 +32,7 @@ The Rust server listens on `http://localhost:3000` by default.
 The Rust server uses the same environment variable names as the legacy Node server:
 
 ```bash
-FLUID_FEE_PAYER_SECRET=SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+FLUID_FEE_PAYER_SECRET=YOUR_STELLAR_SECRET_KEY
 FLUID_BASE_FEE=100
 FLUID_FEE_MULTIPLIER=2.0
 STELLAR_NETWORK_PASSPHRASE=Test SDF Network ; September 2015

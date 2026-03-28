@@ -10,10 +10,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tracing::info;
 
-use crate::{
-    config::HorizonSelectionStrategy,
-    error::AppError,
-};
+use crate::{config::HorizonSelectionStrategy, error::AppError};
 
 #[derive(Clone, Serialize)]
 pub struct HorizonNodeStatus {
@@ -161,7 +158,8 @@ impl HorizonCluster {
                             continue;
                         }
                         HorizonErrorDisposition::Final(message) => {
-                            self.mark_node_checked(*node_index, Some(message.clone())).await;
+                            self.mark_node_checked(*node_index, Some(message.clone()))
+                                .await;
                             info!(
                                 "[HorizonFailover] Submission failed on {} (final) - {}",
                                 node_url, message
@@ -196,7 +194,10 @@ impl HorizonCluster {
         ))
     }
 
-    pub async fn get_transaction(&self, hash: &str) -> Result<HorizonTransactionResponse, AppError> {
+    pub async fn get_transaction(
+        &self,
+        hash: &str,
+    ) -> Result<HorizonTransactionResponse, AppError> {
         let order = self.node_order().await;
         let mut last_error = None;
 
@@ -234,7 +235,8 @@ impl HorizonCluster {
                             continue;
                         }
                         HorizonErrorDisposition::Final(message) => {
-                            self.mark_node_checked(node_index, Some(message.clone())).await;
+                            self.mark_node_checked(node_index, Some(message.clone()))
+                                .await;
                             return Err(AppError::new(
                                 StatusCode::BAD_GATEWAY,
                                 "SUBMISSION_FAILED",
@@ -271,7 +273,13 @@ impl HorizonCluster {
 
         match self.strategy {
             HorizonSelectionStrategy::Priority => {
-                indexes.sort_by_key(|index| if guard[*index].state == "Active" { 0 } else { 1 });
+                indexes.sort_by_key(|index| {
+                    if guard[*index].state == "Active" {
+                        0
+                    } else {
+                        1
+                    }
+                });
             }
             HorizonSelectionStrategy::RoundRobin => {
                 if !indexes.is_empty() {
@@ -348,12 +356,7 @@ fn iso_now() -> String {
 mod tests {
     use std::sync::Once;
 
-    use axum::{
-        http::StatusCode,
-        response::IntoResponse,
-        routing::post,
-        Json, Router,
-    };
+    use axum::{http::StatusCode, response::IntoResponse, routing::post, Json, Router};
     use serde_json::json;
 
     use super::*;
@@ -392,7 +395,8 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         init_tracing();
 
-        let node_b_url = start_submit_server(StatusCode::OK, json!({ "hash": "hash-from-node-b" })).await?;
+        let node_b_url =
+            start_submit_server(StatusCode::OK, json!({ "hash": "hash-from-node-b" })).await?;
         let unreachable_node_a = "http://127.0.0.1:9".to_string();
         let cluster = HorizonCluster::new(
             &[unreachable_node_a.clone(), node_b_url.clone()],
@@ -430,7 +434,8 @@ mod tests {
             json!({ "detail": "tx_bad_seq" }),
         )
         .await?;
-        let secondary_url = start_submit_server(StatusCode::OK, json!({ "hash": "should-not-run" })).await?;
+        let secondary_url =
+            start_submit_server(StatusCode::OK, json!({ "hash": "should-not-run" })).await?;
         let cluster = HorizonCluster::new(
             &[invalid_node_url.clone(), secondary_url.clone()],
             HorizonSelectionStrategy::Priority,
